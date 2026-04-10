@@ -1,6 +1,6 @@
 {
   "name": "expo-background-remover",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Expo Module For High Quality Background Remover",
   "main": "build/index.js",
   "types": "build/index.d.ts",

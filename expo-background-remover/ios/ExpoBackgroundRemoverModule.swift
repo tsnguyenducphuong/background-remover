@@ -4,6 +4,9 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
 import Foundation
+import ImageIO
+import CoreGraphics
+import CoreVideo
 
 public class ExpoBackgroundRemoverModule: Module {
   private let context = CIContext()
@@ -50,7 +53,15 @@ public class ExpoBackgroundRemoverModule: Module {
         DispatchQueue.global(qos: .userInitiated).async {
           do {
             // 2. Downscale to max 2048px to prevent OOM
-            let processedImage = self.downscaleImage(image: uiImage, maxDimension: 2048)
+            // let processedImage = self.downscaleImage(image: uiImage, maxDimension: 2048)
+
+            // Downsample using CGImageSource for memory efficiency and EXIF correction
+            guard let processedImage = self.loadDownsampledImage(
+                at: url,
+                for: CGSize(width: 2048, height: 2048)
+            ) else {
+                 throw ImageLoadingException()
+            }
             
             // 3. API Availability Check (iOS 17.0+ for Instance Masking)
             if #available(iOS 17.0, *) {
@@ -98,6 +109,7 @@ public class ExpoBackgroundRemoverModule: Module {
     guard let maskBuffer = try result.generateMask(forInstances: result.allInstances) else {
       throw ImageProcessingException()
     }
+    // let maskBuffer = try result.generateMask(forInstances: result.allInstances)
     return try applyMaskAndSave(image: image, maskBuffer: maskBuffer)
   }
 
@@ -133,7 +145,7 @@ public class ExpoBackgroundRemoverModule: Module {
      throw ImageProcessingException()
     }
     filter.setValue(ciImage, forKey: kCIInputImageKey)
-    let transparentBG = CIImage(color: .clear).cropped(to: ciImage.extent)
+    let transparentBG = CIImage(color: CIColor.clear).cropped(to: ciImage.extent)
     filter.setValue(transparentBG, forKey: kCIInputBackgroundImageKey)
     filter.setValue(scaledMask, forKey: kCIInputMaskImageKey)
 
@@ -160,6 +172,23 @@ public class ExpoBackgroundRemoverModule: Module {
       image.draw(in: CGRect(origin: .zero, size: newSize))
     }
   }
+
+  // Helper: Efficiently loads and downsamples image without decoding full resolution first
+  private func loadDownsampledImage(at url: URL, for size: CGSize) -> UIImage? {
+    let options: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true, // Respects EXIF orientation
+        kCGImageSourceShouldCacheImmediately: true,
+        kCGImageSourceThumbnailMaxPixelSize: max(size.width, size.height)
+    ]
+    
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+        return nil
+    }
+    return UIImage(cgImage: cgImage)
+}
+
 
 
 // MARK: - Exceptions

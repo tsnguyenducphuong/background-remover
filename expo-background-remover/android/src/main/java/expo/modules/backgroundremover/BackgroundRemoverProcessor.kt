@@ -28,11 +28,12 @@ class BackgroundRemoverProcessor(private val context: Context) {
 
     suspend fun processImage(uriString: String): String = withContext(Dispatchers.IO) {
       var bitmap: Bitmap? = null
+      val uri = Uri.parse(uriString)
       try{
-        bitmap = loadAndResizeBitmap(uriString, 2048)
+        // bitmap = loadAndResizeBitmap(uriString, 2048)
+        bitmap = ImageUtils.loadBitmap(context, uri, 2048, 2048)?: throw Exception("Failed to load bitmap")
         
-        // FIX 1: Defined getRotation helper
-        val inputImage = InputImage.fromBitmap(bitmap, getRotation(uriString))
+        val inputImage = InputImage.fromBitmap(bitmap, 0)
 
         val result = segmenter.process(inputImage).await()
         
