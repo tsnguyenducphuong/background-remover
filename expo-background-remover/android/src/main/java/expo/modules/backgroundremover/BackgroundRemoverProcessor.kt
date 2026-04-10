@@ -28,10 +28,10 @@ class BackgroundRemoverProcessor(private val context: Context) {
 
     suspend fun processImage(uriString: String): String = withContext(Dispatchers.IO) {
       var bitmap: Bitmap? = null
-      val uri = Uri.parse(uriString)
+    //   val uri = Uri.parse(uriString)
       try{
         // bitmap = loadAndResizeBitmap(uriString, 2048)
-        bitmap = ImageUtils.loadBitmap(context, uri, 2048, 2048)?: throw Exception("Failed to load bitmap")
+        bitmap = ImageUtils.loadBitmap(context, uriString, 2048, 2048)?: throw Exception("Failed to load bitmap")
         
         val inputImage = InputImage.fromBitmap(bitmap, 0)
 
