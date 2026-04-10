@@ -2,9 +2,9 @@ package expo.modules.backgroundremover
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.net.URL
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import java.net.URL 
+import expo.modules.kotlin.Promise // Ensure this is here for the Promise type
+import kotlinx.coroutines.launch // Required for .launch
  
 
 class ExpoBackgroundRemoverModule : Module() {
@@ -32,20 +32,27 @@ class ExpoBackgroundRemoverModule : Module() {
 
   
 
-  AsyncFunction("removeBackgroundAsync") { imageUri: String ->
-    val context = appContext.reactContext
-    ?: throw Exception("Context not available")
+   
 
-    val processor = BackgroundRemoverProcessor(context)
+   AsyncFunction("removeBackgroundAsync") { imageUri: String, promise: expo.modules.kotlin.Promise ->
+    val context = appContext.reactContext ?: return@AsyncFunction promise.reject(
+        "NO_CONTEXT", "React Context is null", null
+    )
 
-      try {
-        return@AsyncFunction withContext(Dispatchers.IO) {
-         processor.processImage(imageUri)
+    // Use the Expo-managed background queue to run your coroutine safely
+    appContext.backgroundQueue.launch {
+        val processor = BackgroundRemoverProcessor(context)
+        try {
+            val result = processor.processImage(imageUri)
+            promise.resolve(result)
+        } catch (e: Exception) {
+            // Rejects the JS promise with the error message
+            promise.reject("ERR_BG_REMOVER", e.message, e)
+        } finally {
+            processor.close()
         }
-      } finally {
-       processor.close()
-      }
-   }
+    }
+    }
 
 
     // Defines a JavaScript function that always returns a Promise and whose native code
