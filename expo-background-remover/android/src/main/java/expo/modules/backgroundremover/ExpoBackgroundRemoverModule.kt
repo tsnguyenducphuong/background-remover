@@ -29,14 +29,18 @@ class ExpoBackgroundRemoverModule : Module() {
     }
 
     AsyncFunction("removeBackgroundAsync") { imageUri: String ->
-       val processor = BackgroundRemoverProcessor(appContext.reactContext!!)
+    // 1. Get the context safely
+    val context = appContext.reactContext ?: throw Exception("Context not available")
+    val processor = BackgroundRemoverProcessor(context)
 
-       try {
-         return@AsyncFunction processor.processImage(imageUri)
-       } finally {
-          processor.close() //ensure cleanup
-       }
+    // 2. Simply call the suspend function. 
+    // Expo's AsyncFunction supports 'suspend' naturally.
+    try {
+        processor.processImage(imageUri)
+    } finally {
+        processor.close()
     }
+}
 
 
     // Defines a JavaScript function that always returns a Promise and whose native code

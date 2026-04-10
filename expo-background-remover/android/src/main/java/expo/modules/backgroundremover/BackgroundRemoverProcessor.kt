@@ -35,10 +35,9 @@ class BackgroundRemoverProcessor(private val context: Context) {
         val maskBuffer = result.foregroundConfidenceMask 
             ?: throw Exception("Could not detect subjects")
 
-        // FIX 2: Use bitmap dimensions (result does not have width/height)
-        val totalPixels = maskBuffer.remaining()
+        // The mask is guaranteed to match the input bitmap size.
         val maskWidth = bitmap.width
-        val maskHeight = totalPixels / maskWidth
+        val maskHeight = bitmap.height
 
         val maskBitmap = createMaskFromBuffer(maskBuffer, maskWidth, maskHeight)
         val outputBitmap = applyMaskToBitmap(bitmap, maskBitmap)
