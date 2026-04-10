@@ -3,6 +3,7 @@ import Vision
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
+import Foundation
 
 public class ExpoBackgroundRemoverModule: Module {
   private let context = CIContext()
@@ -94,7 +95,9 @@ public class ExpoBackgroundRemoverModule: Module {
     guard let result = request.results?.first else { throw NoSubjectDetectedException() }
     
     // Generate combined mask for all subjects
-    let maskBuffer = try result.generateMask(forInstances: result.allInstances)
+    guard let maskBuffer = try result.generateMask(forInstances: result.allInstances) else {
+      throw ImageProcessingException()
+    }
     return try applyMaskAndSave(image: image, maskBuffer: maskBuffer)
   }
 
@@ -129,10 +132,10 @@ public class ExpoBackgroundRemoverModule: Module {
     guard let filter = CIFilter(name: "CIBlendWithMask") else {
      throw ImageProcessingException()
     }
-    filter.inputImage = ciImage
+    filter.setValue(ciImage, forKey: kCIInputImageKey)
     let transparentBG = CIImage(color: .clear).cropped(to: ciImage.extent)
-    filter.backgroundImage = transparentBG // Ensures transparency where mask is 0
-    filter.maskImage = scaledMask
+    filter.setValue(transparentBG, forKey: kCIInputBackgroundImageKey)
+    filter.setValue(scaledMask, forKey: kCIInputMaskImageKey)
 
     guard let outputImage = filter.outputImage,
           let cgImage = context.createCGImage(outputImage, from: ciImage.extent) else {

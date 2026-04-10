@@ -12,6 +12,8 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.FileInputStream
 import java.util.UUID
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
@@ -25,7 +27,9 @@ class BackgroundRemoverProcessor(private val context: Context) {
     )
 
     suspend fun processImage(uriString: String): String = withContext(Dispatchers.IO) {
-        val bitmap = loadAndResizeBitmap(uriString, 2048)
+      var bitmap: Bitmap? = null
+      try{
+        bitmap = loadAndResizeBitmap(uriString, 2048)
         
         // FIX 1: Defined getRotation helper
         val inputImage = InputImage.fromBitmap(bitmap, getRotation(uriString))
@@ -42,32 +46,47 @@ class BackgroundRemoverProcessor(private val context: Context) {
         val maskBitmap = createMaskFromBuffer(maskBuffer, maskWidth, maskHeight)
         val outputBitmap = applyMaskToBitmap(bitmap, maskBitmap)
 
-        saveResult(outputBitmap)
+        // mask no longer needed
+        maskBitmap.recycle()
+
+        val resultPath = saveResult(outputBitmap)
+
+        // cleanup
+        outputBitmap.recycle() 
+        return@withContext resultPath
+      }finally {
+          // ALWAYS recycle original bitmap
+          bitmap?.recycle()
+      }
+
     }
 
     // Helper to handle image rotation logic
-    private fun getRotation(uriString: String): Int {
-        return try {
-            val inputStream = context.contentResolver.openInputStream(Uri.parse(uriString))
-            val exifInterface = inputStream?.use { ExifInterface(it) }
-            when (exifInterface?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-                ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                else -> 0
-            }
-        } catch (e: Exception) {
-            0
+   private fun getRotation(uriString: String): Int {
+    return try {
+        // Use the helper and the .use block for automatic closing
+        val exifInterface = openStream(uriString)?.use { ExifInterface(it) }
+
+        when (exifInterface?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270
+            else -> 0
         }
+    } catch (e: Exception) {
+        e.printStackTrace() // Logs the specific exception (e.g., FileNotFound, SecurityException)
+        0
     }
+}
 
     private fun loadAndResizeBitmap(uriString: String, maxDimension: Int): Bitmap {
         val uri = Uri.parse(uriString)
-        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        
-        context.contentResolver.openInputStream(uri)?.use { 
-            BitmapFactory.decodeStream(it, null, options) 
-        } ?: throw Exception("Failed to open input stream")
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true } 
+
+        // Using the helper with the .use extension
+        openStream(uriString)?.use { stream ->
+          BitmapFactory.decodeStream(stream, null, options)
+        } ?: throw Exception("Could not open stream for image")
         
         var sampleSize = 1
         while ((options.outWidth / (sampleSize * 2)) >= maxDimension && 
@@ -76,9 +95,9 @@ class BackgroundRemoverProcessor(private val context: Context) {
         }
         
         val loadOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        val subsampledBitmap = context.contentResolver.openInputStream(uri)?.use { 
-            BitmapFactory.decodeStream(it, null, loadOptions) 
-        } ?: throw Exception("Failed to decode image")
+        val subsampledBitmap = openStream(uriString)?.use { stream ->
+           BitmapFactory.decodeStream(stream, null, loadOptions)
+        } ?: throw Exception("Failed to decode subsampled image")
 
         val scale = minOf(maxDimension.toFloat() / subsampledBitmap.width, maxDimension.toFloat() / subsampledBitmap.height)
         if (scale >= 1f) return subsampledBitmap
@@ -124,6 +143,24 @@ class BackgroundRemoverProcessor(private val context: Context) {
         val file = File(context.cacheDir, "${UUID.randomUUID()}.png")
         FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         return Uri.fromFile(file).toString()
+    }
+
+    private fun openStream(uriString: String): java.io.InputStream? {
+    val uri = Uri.parse(uriString)
+    return when (uri.scheme) {
+        "content" -> {
+            // Asks the Android System to resolve the virtual URI
+            context.contentResolver.openInputStream(uri)
+        }
+        "file" -> {
+            // Opens a direct pipe to the file on the storage
+            uri.path?.let { java.io.FileInputStream(it) }
+        }
+        else -> {
+            // Handles raw paths that might not have a scheme prefix
+            java.io.FileInputStream(uriString)
+        }
+     }
     }
     
     fun close() {

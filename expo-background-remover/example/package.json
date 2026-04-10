@@ -1,6 +1,6 @@
 {
   "name": "expo-background-remover-example",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",

@@ -2,7 +2,7 @@
   "expo": {
     "name": "expo-background-remover-example",
     "slug": "expo-background-remover-example",
-    "version": "1.2.0",
+    "version": "1.2.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
