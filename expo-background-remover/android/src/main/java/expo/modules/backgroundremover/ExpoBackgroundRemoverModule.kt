@@ -3,6 +3,8 @@ package expo.modules.backgroundremover
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
  
 
 class ExpoBackgroundRemoverModule : Module() {
@@ -28,19 +30,22 @@ class ExpoBackgroundRemoverModule : Module() {
       "Hello world! 👋"
     }
 
-    AsyncFunction("removeBackgroundAsync") { imageUri: String ->
-    // 1. Get the context safely
-    val context = appContext.reactContext ?: throw Exception("Context not available")
+  
+
+  AsyncFunction("removeBackgroundAsync") { imageUri: String ->
+    val context = appContext.reactContext
+    ?: throw Exception("Context not available")
+
     val processor = BackgroundRemoverProcessor(context)
 
-    // 2. Simply call the suspend function. 
-    // Expo's AsyncFunction supports 'suspend' naturally.
-    try {
-        processor.processImage(imageUri)
-    } finally {
-        processor.close()
-    }
-}
+      try {
+        return@AsyncFunction withContext(Dispatchers.IO) {
+         processor.processImage(imageUri)
+        }
+      } finally {
+       processor.close()
+      }
+   }
 
 
     // Defines a JavaScript function that always returns a Promise and whose native code
