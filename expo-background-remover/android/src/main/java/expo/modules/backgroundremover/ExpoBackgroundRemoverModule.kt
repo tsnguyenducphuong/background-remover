@@ -3,6 +3,7 @@ package expo.modules.backgroundremover
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.net.URL
+ 
 
 class ExpoBackgroundRemoverModule : Module() {
   // Each module class must implement the definition function. The definition consists of components
@@ -28,9 +29,13 @@ class ExpoBackgroundRemoverModule : Module() {
     }
 
     AsyncFunction("removeBackgroundAsync") { imageUri: String ->
-      // Pass the internal context to the processor
-      val processor = BackgroundRemoverProcessor(appContext.reactContext!!)
-      return@AsyncFunction processor.processImage(imageUri)
+       val processor = BackgroundRemoverProcessor(appContext.reactContext!!)
+
+       try {
+         return@AsyncFunction processor.processImage(imageUri)
+       } finally {
+          processor.close() //ensure cleanup
+       }
     }
 
 
