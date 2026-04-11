@@ -13,11 +13,24 @@ class ExpoBackgroundRemoverModule : Module() {
   // Each module class must implement the definition function. The definition consists of components
   // that describes the module's functionality and behavior.
   // See https://docs.expo.dev/modules/module-api for more details about available components.
+  private lateinit var processor: BackgroundRemoverProcessor
+
   override fun definition() = ModuleDefinition {
     // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
     // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
     // The module will be accessible from `requireNativeModule('ExpoBackgroundRemover')` in JavaScript.
     Name("ExpoBackgroundRemover")
+
+    OnCreate {
+        processor = BackgroundRemoverProcessor(appContext.reactContext!!)
+        processor.warmUp()
+    }
+
+    OnDestroy {
+            if (::processor.isInitialized) {
+                processor.close()
+            }
+    }
 
     // Defines constant property on the module.
     Constant("PI") {
@@ -44,14 +57,15 @@ class ExpoBackgroundRemoverModule : Module() {
     // Using Dispatchers.IO ensures this runs on a background thread,
     // which prevents the UI from freezing during image processing.
     CoroutineScope(Dispatchers.IO).launch {
-        val processor = BackgroundRemoverProcessor(context)
+        if (!::processor.isInitialized) {
+            processor = BackgroundRemoverProcessor(appContext.reactContext!!)
+            processor.warmUp()
+        }
         try {
             val result = processor.processImage(imageUri)
             promise.resolve(result)
         } catch (e: Exception) {
             promise.reject("ERR_BG_REMOVER", e.message, e)
-        } finally {
-            processor.close()
         }
     }
 }

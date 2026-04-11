@@ -58,7 +58,7 @@ public class ExpoBackgroundRemoverModule: Module {
             // Downsample using CGImageSource for memory efficiency and EXIF correction
             guard let processedImage = self.loadDownsampledImage(
                 at: url,
-                for: CGSize(width: 2048, height: 2048)
+                for: CGSize(width: 512, height: 512)
             ) else {
                  throw ImageLoadingException()
             }

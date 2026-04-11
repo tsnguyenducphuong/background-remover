@@ -10,6 +10,10 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -17,6 +21,7 @@ import java.io.FileInputStream
 import java.util.UUID
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
+import android.util.Log
 
 class BackgroundRemoverProcessor(private val context: Context) {
 
@@ -26,16 +31,21 @@ class BackgroundRemoverProcessor(private val context: Context) {
             .build()
     )
 
+    @Volatile
+    private var isWarmedUp = false
+
     suspend fun processImage(uriString: String): String = withContext(Dispatchers.IO) {
       var bitmap: Bitmap? = null
     //   val uri = Uri.parse(uriString)
       try{
         // bitmap = loadAndResizeBitmap(uriString, 2048)
-        bitmap = ImageUtils.loadBitmap(context, uriString, 2048, 2048)?: throw Exception("Failed to load bitmap")
+        bitmap = ImageUtils.loadBitmap(context, uriString, 512, 512)?: throw Exception("Failed to load bitmap")
         
-        val inputImage = InputImage.fromBitmap(bitmap, 0)
+        val inputImage = InputImage.fromBitmap(bitmap, 0) 
 
-        val result = segmenter.process(inputImage).await()
+        val result = withTimeout(30000) {
+            segmenter.process(inputImage).await()
+        }
         
         val maskBuffer = result.foregroundConfidenceMask 
             ?: throw Exception("Could not detect subjects")
@@ -60,6 +70,35 @@ class BackgroundRemoverProcessor(private val context: Context) {
           bitmap?.recycle()
       }
 
+    } 
+   
+
+   @Synchronized  
+   fun warmUp() {
+    if (isWarmedUp) return
+
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            Log.d("BG_REMOVER", "Warmup started")
+
+            val dummyBitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
+            val inputImage = InputImage.fromBitmap(dummyBitmap, 0)
+
+            withTimeout(20000) {
+                segmenter.process(inputImage).await()
+            }
+
+            dummyBitmap.recycle()
+            isWarmedUp = true
+
+            Log.d("BG_REMOVER", "Warmup completed")
+
+        } catch (e: TimeoutCancellationException) {
+            Log.e("BG_REMOVER", "Warmup timeout", e)
+        } catch (e: Exception) {
+            Log.e("BG_REMOVER", "Warmup failed", e)
+        }
+      }
     }
 
     // Helper to handle image rotation logic
