@@ -106,10 +106,8 @@ public class ExpoBackgroundRemoverModule: Module {
     guard let result = request.results?.first else { throw NoSubjectDetectedException() }
     
     // Generate combined mask for all subjects
-    guard let maskBuffer = try result.generateMask(forInstances: result.allInstances) else {
-      throw ImageProcessingException()
-    }
-    // let maskBuffer = try result.generateMask(forInstances: result.allInstances)
+    let maskBuffer = try result.generateMask(forInstances: result.allInstances) 
+    
     return try applyMaskAndSave(image: image, maskBuffer: maskBuffer)
   }
 
